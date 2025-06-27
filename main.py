@@ -99,6 +99,13 @@ class WeatherApp:
         self.weatherDataList = []
         self.hourlyForecasts = {}
         self.loadDefaultCities()
+        
+    def is_valid_int(value):
+        try:
+            int(value)
+            return True
+        except ValueError:
+            return False
 
     def loadDefaultCities(self): #this part is collected from various websites and merged into one complete list
         default_cities = [
@@ -179,7 +186,8 @@ class WeatherApp:
 
     def addWeatherData(self, city, continent, temperature, condition, windSpeed, humidity):
         data = WeatherData(city, continent, temperature, condition, windSpeed, humidity)
-        self.weatherDataList.append(data)
+        if not any(data.city.lower() == city.lower() for data in self.weatherDataList):
+            self.addWeatherData.append(data)
 
     def listCities(self):
         print("\n🌍 Cities Weather Data:")
@@ -238,29 +246,35 @@ class WeatherApp:
         for data in self.weatherDataList:
             if data.city.lower() == city.lower():
                 print(f"Updating info for {data.city} (leave blank to keep current)")
+
                 new_temp = input(f"Current temp {data.temperature}°C, new: ")
                 if new_temp.strip():
-                    if new_temp.lstrip('-').isdigit():
+                    if is_valid_int(new_temp):
                         data.temperature = int(new_temp)
                     else:
-                        print("Invalid input for temperature. skipping...")
+                        print("Invalid input for temperature. Skipping...")
+
                 new_condition = input(f"Current condition '{data.condition}', new: ")
                 if new_condition.strip():
                     data.condition = new_condition
+
                 new_wind = input(f"Current wind speed {data.windSpeed} km/h, new: ")
                 if new_wind.strip():
-                    if new_wind.isdigit():
+                    if is_valid_int(new_wind):
                         data.windSpeed = int(new_wind)
                     else:
-                        print("Invalid input for wind speed. skipping...")
+                        print("Invalid input for wind speed. Skipping...")
+
                 new_humidity = input(f"Current humidity {data.humidity}%, new: ")
                 if new_humidity.strip():
-                    if new_humidity.isdigit():
+                    if is_valid_int(new_humidity):
                         data.humidity = int(new_humidity)
                     else:
-                        print("Invalid input for humidity. skipping...")
+                        print("Invalid input for humidity. Skipping...")
+
                 print("City info is updated.")
                 return
+
         print("City is not found.")
         print("Please try again.")
 
@@ -275,18 +289,23 @@ class WeatherApp:
         print("City is not found.")
 
     def saveDataToFile(self, filename="weather_data.json"):
-        data_to_save = []
-        for w in self.weatherDataList:
-            data_to_save.append({
-                "city": w.city,
-                "continent": w.continent,
-                "temperature": w.temperature,
-                "condition": w.condition,
-                "windSpeed": w.windSpeed,
-                "humidity": w.humidity
-            })
+        data_to_save = [
+            {
+                "city": d.city,
+                "continent": d.continent,
+                "temperature": d.temperature,
+                "condition": d.condition,
+                "windSpeed": d.windSpeed,
+                "humidity": d.humidity
+            }
+            for d in self.weatherDataList
+        ]
+        data_package = {
+            "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "data": data_to_save
+        }
         with open(filename, "w") as f:
-            json.dump(data_to_save, f, indent=2)
+            json.dump(data_package, f, indent=2)
         print(f"Data saved to {filename}")
 
     def loadDataFromFile(self, filename="weather_data.json"):
@@ -294,12 +313,14 @@ class WeatherApp:
             print("No save data file found.")
             return
         with open(filename, "r") as f:
-            loaded_data = json.load(f)
+            loaded_package = json.load(f)
+
         self.weatherDataList = []
-        for entry in loaded_data:
+
+        for entry in loaded_package.get("data", []):
             self.addWeatherData(entry["city"], entry["continent"], entry["temperature"],
                                 entry["condition"], entry["windSpeed"], entry["humidity"])
-        print(f"Data loaded by {filename}")
+        print(f"Data loaded from {filename}")
 
     def showWeatherAlerts(self, city):
         for data in self.weatherDataList:
