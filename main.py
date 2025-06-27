@@ -1,8 +1,9 @@
-import json #to create saveDataToFile and loadDataFromFile, i wanted to use json 
+import json #to create saveDataToFile and loadDataFromFile, i wanted to use json
 import random #by using random, we replicate the fluctuation of hourly weather conditions (almost accurate)
 from datetime import datetime #when saving data, we need to save data like when the file was saved. so i used datetime as well
 from collections import defaultdict #with defaultdict we write cleaner and safer code by using automatic default values ​​in the dictionary
 import os #to check if file exists in the project this provides a good method
+from abc import ABC, abstractmethod #for abstract base classes
 
 class WeatherData:
     def __init__(self, city, continent, temperature, condition, windSpeed, humidity):
@@ -13,18 +14,51 @@ class WeatherData:
         self.windSpeed = windSpeed
         self.humidity = humidity
 
-class WeatherAlert:
+    def __str__(self):
+        return (f"{self.city} ({self.continent}) - {self.temperature}°C, {self.condition}, "
+                f"Wind: {self.windSpeed} km/h, Humidity: {self.humidity}%")
+                
+class BaseWeatherAlert(ABC):
     def __init__(self, weatherData):
         self.data = weatherData
 
-    def checkAlerts(self):
-        alerts = []
+    @abstractmethod
+    def check_alert(self):
+        pass
+
+class SevereWeatherAlert(BaseWeatherAlert):
+    def check_alert(self):
         if self.data.condition in ["Stormy", "Snowy"]:
-            alerts.append("⚠️ Severe weather expected")
+            return "⚠️ Severe weather expected"
+        return None
+
+class WindWarningAlert(BaseWeatherAlert):
+    def check_alert(self):
         if self.data.windSpeed > 30:
-            alerts.append("💨 Fast winds warning")
+            return "💨 Fast winds warning"
+        return None
+
+class HumidityAlert(BaseWeatherAlert):
+    def check_alert(self):
         if self.data.humidity > 80:
-            alerts.append("💧 Very humid")
+            return "💧 Very humid"
+        return None
+
+class WeatherAlertHandler:
+    def __init__(self):
+        self.alert_types = [
+            SevereWeatherAlert,
+            WindWarningAlert,
+            HumidityAlert
+        ]
+
+    def get_alerts(self, weather_data):
+        alerts = []
+        for AlertClass in self.alert_types:
+            alert_instance = AlertClass(weather_data)
+            result = alert_instance.check_alert()
+            if result:
+                alerts.append(result)
         return alerts
 
 class ForecastAnalyzer:
@@ -98,8 +132,10 @@ class WeatherApp:
     def __init__(self):
         self.weatherDataList = []
         self.hourlyForecasts = {}
+        self.alert_handler = WeatherAlertHandler() # begin the alerthandler
         self.loadDefaultCities()
-        
+
+    @staticmethod
     def is_valid_int(value):
         try:
             int(value)
@@ -117,13 +153,11 @@ class WeatherApp:
             ("Sydney", "Australia", 20, "Sunny", 18, 65),
             ("Moscow", "Europe", 5, "Snowy", 25, 75),
             ("Delhi", "Asia", 35, "Sunny", 10, 40),
-            ("Buenos Aires", "South America", 19, "Rainy", 7, 85),
             ("Lagos", "Africa", 28, "Sunny", 22, 55),
             ("Toronto", "North America", 10, "Cloudy", 14, 60),
             ("Paris", "Europe", 17, "Rainy", 12, 65),
             ("Jakarta", "Asia", 29, "Stormy", 30, 90),
             ("Mexico City", "North America", 20, "Sunny", 10, 55),
-            ("Melbourne", "Australia", 18, "Cloudy", 13, 70),
             ("Cape Town", "Africa", 23, "Sunny", 20, 60),
             ("Berlin", "Europe", 15, "Cloudy", 15, 60),
             ("Seoul", "Asia", 21, "Sunny", 14, 55),
@@ -134,7 +168,6 @@ class WeatherApp:
             ("Lima", "South America", 22, "Cloudy", 10, 50),
             ("Nairobi", "Africa", 27, "Sunny", 18, 40),
             ("Brisbane", "Australia", 21, "Sunny", 12, 50),
-            ("Vancouver", "North America", 14, "Cloudy", 17, 70),
             ("Rome", "Europe", 19, "Sunny", 14, 55),
             ("Singapore", "Asia", 28, "Rainy", 20, 85),
             ("Houston", "North America", 25, "Sunny", 15, 60),
@@ -171,11 +204,9 @@ class WeatherApp:
             ("Minneapolis", "North America", 10, "Snowy", 22, 75),
             ("Phoenix", "North America", 29, "Sunny", 12, 30),
             ("Las Vegas", "North America", 35, "Sunny", 10, 20),
-            ("Honolulu", "Australia", 28, "Sunny", 11, 65),
             ("Guatemala City", "North America", 24, "Rainy", 14, 80),
             ("San Francisco", "North America", 17, "Cloudy", 13, 60),
             ("Seattle", "North America", 14, "Rainy", 15, 85),
-            ("Buenos Aires", "South America", 19, "Cloudy", 10, 70),
             ("Caracas", "South America", 27, "Sunny", 14, 55),
             ("Quito", "South America", 20, "Sunny", 12, 60),
             ("Medellín", "South America", 22, "Cloudy", 10, 65),
@@ -186,13 +217,19 @@ class WeatherApp:
 
     def addWeatherData(self, city, continent, temperature, condition, windSpeed, humidity):
         data = WeatherData(city, continent, temperature, condition, windSpeed, humidity)
-        if not any(data.city.lower() == city.lower() for data in self.weatherDataList):
-            self.addWeatherData.append(data)
+        if not any(data.city.lower() == existing_data.city.lower() for existing_data in self.weatherDataList):
+            self.weatherDataList.append(data)
+            print(f"Added weather data for {city}.")
+        else:
+            print(f"Weather data for {city} already exists use 'Update city info' to modify.")
 
     def listCities(self):
+        if not self.weatherDataList:
+            print("\nNo cities available. Add some weather data first!")
+            return
         print("\n🌍 Cities Weather Data:")
         for i, data in enumerate(self.weatherDataList):
-            print(f"{i+1}. {data.city} ({data.continent}) - {data.temperature}°C, {data.condition}, Wind: {data.windSpeed} km/h, Humidity: {data.humidity}%")
+            print(f"{i+1}. {data}")
 
     def generateHourlyForecast(self, city):
         base = None
@@ -203,6 +240,7 @@ class WeatherApp:
         if not base:
             print("City not found.")
             return
+
         forecasts = []
         for hour in range(24):
             temp_variation = random.randint(-3, 3)
@@ -218,38 +256,50 @@ class WeatherApp:
                 humidity=max(0, min(100, base.humidity + humidity_variation))
             )
             forecasts.append(forecast)
-        self.hourlyForecasts[city] = forecasts
+        self.hourlyForecasts[city.lower()] = forecasts # storing it with lowercase city for consistency
+        print(f"Generated 24-hour forecast for {city}.")
+
 
     def showHourlyForecast(self, city):
-        if city not in self.hourlyForecasts:
-            print("No hourly forecast generated for this city")
+        city_key = city.lower()
+        if city_key not in self.hourlyForecasts:
+            print(f"No hourly forecast generated for {city}.")
             return
-        print(f"\n🕒 24hour forecast for {city}:")
-        for i, f in enumerate(self.hourlyForecasts[city]):
+        print(f"\n🕒 24-hour forecast for {city}:")
+        for i, f in enumerate(self.hourlyForecasts[city_key]):
             print(f"Hour {i}: {f.temperature}°C, {f.condition}, Wind: {f.windSpeed} km/h, Humidity: {f.humidity}%")
 
     def generateReport(self):
+        if not self.weatherDataList:
+            print("\nNo weather data available to generate a report.")
+            return
+
         print("\n📊 Weather Report by Continent:")
         continent_data = defaultdict(list)
         for data in self.weatherDataList:
             continent_data[data.continent].append(data)
+
         for cont, cities in continent_data.items():
             temps = [c.temperature for c in cities]
             humidity = [c.humidity for c in cities]
             winds = [c.windSpeed for c in cities]
-            avg_temp = sum(temps)/len(temps)
-            avg_humidity = sum(humidity)/len(humidity)
-            avg_wind = sum(winds)/len(winds)
+
+            avg_temp = sum(temps) / len(temps) if temps else 0
+            avg_humidity = sum(humidity) / len(humidity) if humidity else 0
+            avg_wind = sum(winds) / len(winds) if winds else 0
+
             print(f"{cont}: Avg Temp {avg_temp:.1f}°C, Avg Humidity {avg_humidity:.1f}%, Avg Wind {avg_wind:.1f} km/h")
 
     def updateCityInfo(self, city):
+        found = False
         for data in self.weatherDataList:
             if data.city.lower() == city.lower():
+                found = True
                 print(f"Updating info for {data.city} (leave blank to keep current)")
 
                 new_temp = input(f"Current temp {data.temperature}°C, new: ")
                 if new_temp.strip():
-                    if is_valid_int(new_temp):
+                    if self.is_valid_int(new_temp):
                         data.temperature = int(new_temp)
                     else:
                         print("Invalid input for temperature. Skipping...")
@@ -260,33 +310,33 @@ class WeatherApp:
 
                 new_wind = input(f"Current wind speed {data.windSpeed} km/h, new: ")
                 if new_wind.strip():
-                    if is_valid_int(new_wind):
+                    if self.is_valid_int(new_wind):
                         data.windSpeed = int(new_wind)
                     else:
                         print("Invalid input for wind speed. Skipping...")
 
                 new_humidity = input(f"Current humidity {data.humidity}%, new: ")
                 if new_humidity.strip():
-                    if is_valid_int(new_humidity):
+                    if self.is_valid_int(new_humidity):
                         data.humidity = int(new_humidity)
                     else:
                         print("Invalid input for humidity. Skipping...")
 
-                print("City info is updated.")
+                print(f"City info for {city} updated successfully.")
                 return
-
-        print("City is not found.")
-        print("Please try again.")
+        if not found:
+            print(f"City '{city}' not found. Please try again.")
 
     def deleteCity(self, city):
-        for i, data in enumerate(self.weatherDataList):
-            if data.city.lower() == city.lower():
-                del self.weatherDataList[i]
-                if city in self.hourlyForecasts:
-                    del self.hourlyForecasts[city]
-                print(f"{city} deleted.")
-                return
-        print("City is not found.")
+        initial_len = len(self.weatherDataList)
+        self.weatherDataList = [data for data in self.weatherDataList if data.city.lower() != city.lower()]
+        if city.lower() in self.hourlyForecasts:
+            del self.hourlyForecasts[city.lower()]
+
+        if len(self.weatherDataList) < initial_len:
+            print(f"{city} deleted.")
+        else:
+            print(f"City '{city}' not found.")
 
     def saveDataToFile(self, filename="weather_data.json"):
         data_to_save = [
@@ -312,35 +362,44 @@ class WeatherApp:
         if not os.path.exists(filename):
             print("No save data file found.")
             return
+
         with open(filename, "r") as f:
             loaded_package = json.load(f)
 
-        self.weatherDataList = []
-
+        self.weatherDataList = [] # Clear existing data before loading
+        loaded_count = 0
         for entry in loaded_package.get("data", []):
             self.addWeatherData(entry["city"], entry["continent"], entry["temperature"],
-                                entry["condition"], entry["windSpeed"], entry["humidity"])
-        print(f"Data loaded from {filename}")
+                                 entry["condition"], entry["windSpeed"], entry["humidity"])
+            loaded_count += 1
+        print(f"Data loaded from {filename}. Loaded {loaded_count} cities.")
+
 
     def showWeatherAlerts(self, city):
+        found_city = None
         for data in self.weatherDataList:
             if data.city.lower() == city.lower():
-                alert = WeatherAlert(data)
-                alerts = alert.checkAlerts()
-                if alerts:
-                    print(f"\n⚠️ Weather alerts for {city}:")
-                    for a in alerts:
-                        print(f" - {a}")
-                else:
-                    print(f"No alert for {city}.")
-                return
-        print("City not found.")
+                found_city = data
+                break
+
+        if found_city:
+            alerts = self.alert_handler.get_alerts(found_city)
+            if alerts:
+                print(f"\n⚠️ Weather alerts for {city}:")
+                for a in alerts:
+                    print(f" - {a}")
+            else:
+                print(f"No alerts for {city}.")
+        else:
+            print(f"City '{city}' not found.")
+
 
     def analyzeForecast(self, city):
-        if city not in self.hourlyForecasts:
-            print("No forecast available for city.")
+        city_key = city.lower()
+        if city_key not in self.hourlyForecasts:
+            print(f"No hourly forecast available for {city}. Please generate one first.")
             return
-        analyzer = ForecastAnalyzer(self.hourlyForecasts[city])
+        analyzer = ForecastAnalyzer(self.hourlyForecasts[city_key])
         analyzer.printForecastAnalysis()
 
     def showMenu(self):
@@ -378,8 +437,7 @@ class WeatherApp:
                     wind = int(input("Wind speed (km/h): ").strip())
                     humidity = int(input("Humidity (%): ").strip())
                 except ValueError:
-                    print("Invalid number input.")
-                    print("Please try again.")
+                    print("Invalid number input. Please try again.")
                     continue
                 condition = input("Condition (Sunny, Rainy, etc.): ").strip()
                 self.addWeatherData(city, continent, temp, condition, wind, humidity)
@@ -412,11 +470,11 @@ class WeatherApp:
             elif choice == "12":
                 WeatherTermMeanings.showMenu()
             elif choice == "0":
-                print("Closing appliation.")
+                print("Closing application.")
                 print("Goodbye!!!!")
                 break
             else:
-                print("Invalid option try again.")
+                print("Invalid option. Please try again.")
 
 if __name__ == "__main__":
     app = WeatherApp()
