@@ -4,6 +4,7 @@ from datetime import datetime #when saving data, we need to save data like when 
 from collections import defaultdict #with defaultdict we write cleaner and safer code by using automatic default values ​​in the dictionary
 import os #to check if file exists in the project this provides a good method
 from abc import ABC, abstractmethod #for abstract base classes
+import unittest #to test the app
 
 class WeatherData:
     def __init__(self, city, continent, temperature, condition, windSpeed, humidity):
@@ -476,6 +477,66 @@ class WeatherApp:
             else:
                 print("Invalid option. Please try again.")
 
+    class WeatherAppTestCase(unittest.TestCase):
+        def setUp(self):
+            self.app = WeatherApp()
+            self.app.weatherDataList.clear()
+            self.app.hourlyForecasts.clear()
+
+        def testAddWeatherData(self):
+            self.app.addWeatherData("TestCity", "TestLand", 25, "Sunny", 10, 50)
+            self.assertEqual(len(self.app.weatherDataList), 1)
+            self.assertEqual(self.app.weatherDataList[0].city, "TestCity")
+
+        def testDuplicateCity(self):
+            self.app.addWeatherData("TestCity", "TestLand", 25, "Sunny", 10, 50)
+            self.app.addWeatherData("TestCity", "TestLand", 30, "Cloudy", 12, 60)
+            self.assertEqual(len(self.app.weatherDataList), 1)
+
+        def testGenerateHourlyForecast(self):
+            self.app.addWeatherData("ForecastCity", "Continent", 20, "Cloudy", 10, 60)
+            self.app.generateHourlyForecast("ForecastCity")
+            self.assertIn("forecastcity", self.app.hourlyForecasts)
+            self.assertEqual(len(self.app.hourlyForecasts["forecastcity"]), 24)
+
+        def testWeatherAlerts(self):
+            self.app.addWeatherData("AlertCity", "Continent", 25, "Stormy", 35, 85)
+            alerts = self.app.alert_handler.get_alerts(self.app.weatherDataList[0])
+            self.assertIn("⚠️ Severe weather expected", alerts)
+            self.assertIn("💨 Fast winds warning", alerts)
+            self.assertIn("💧 Very humid", alerts)
+
+        def testForecastAnalyzer(self):
+            forecasts = [
+                WeatherData("X", "C", 15, "Rainy", 10, 60),
+                WeatherData("X", "C", 20, "Rainy", 12, 70),
+                WeatherData("X", "C", 10, "Sunny", 8, 50)
+            ]
+            analyzer = ForecastAnalyzer(forecasts)
+            self.assertEqual(analyzer.getMaxTemperature(), 20)
+            self.assertEqual(analyzer.getMinTemperature(), 10)
+            self.assertEqual(analyzer.getDominantCondition(), "Rainy")
+
+        def testSaveAndLoadData(self):
+            self.app.addWeatherData("SaveCity", "Continent", 22, "Sunny", 15, 55)
+            self.app.saveDataToFile("test_save.json")
+
+            new_app = WeatherApp()
+            new_app.weatherDataList.clear()
+            new_app.loadDataFromFile("test_save.json")
+            self.assertTrue(any(d.city == "SaveCity" for d in new_app.weatherDataList))
+
+        def testDeleteCity(self):
+            self.app.addWeatherData("DeleteCity", "Continent", 22, "Sunny", 15, 55)
+            self.assertEqual(len(self.app.weatherDataList), 1)
+            self.app.deleteCity("DeleteCity")
+            self.assertEqual(len(self.app.weatherDataList), 0)
+
 if __name__ == "__main__":
-    app = WeatherApp()
-    app.run()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        sys.argv.pop()
+        unittest.main()
+    else:
+        app = WeatherApp()
+        app.run()
